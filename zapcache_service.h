@@ -27,7 +27,7 @@
  *
  * @code
  * if (zapCache.SpliceArmed && zapCache.SpliceArmed())
- *     zapCache.Splice(data, startThresholdMs, PlayBufferedTs, this);
+ *     int delayMs = zapCache.Splice(data, startThresholdMs, PlayBufferedTs, this);
  * @endcode
  *
  * PlayBufferedTs() plays a TS packet with cDevice::PlayTs() of the base class.
@@ -84,12 +84,16 @@ struct ZapCacheService_v1_0 {
 	 * @param play              plays a TS packet (the base class cDevice::PlayTs()),
 	 *                          returns the played bytes (<= 0: try again)
 	 * @param context           passed to play (e.g. the output device)
+	 *
+	 * @return                  -1: the switch doesn't start with buffered packets
+	 *                          (yet), >= 0: it started with them, the delay of the
+	 *                          playback to the live stream in ms (the time from the
+	 *                          buffered I-frame to the newest buffered packet). An
+	 *                          output device may reduce the delay (e.g. by playing
+	 *                          a bit faster).
 	 */
-	void (*Splice)(const unsigned char *data, int startThresholdMs,
-	               int (*play)(void *context, const unsigned char *packet, int size), void *context);
-
-	/** true, if the current channel switch started with buffered packets */
-	bool (*SwitchCached)(void);
+	int (*Splice)(const unsigned char *data, int startThresholdMs,
+	              int (*play)(void *context, const unsigned char *packet, int size), void *context);
 
 	/**
 	 * Report an event of a channel switch for the statistics (optional)

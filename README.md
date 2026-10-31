@@ -147,7 +147,8 @@ can do this, because every packet of the transfer passes cDevice::PlayTs().
 Optional calls:
 - SetOutputAvailable(false), while the output device can't use the zap cache
   (e.g. detached or pip shown),
-- SwitchCached(), to know, if a switch started with the buffer,
+- the return value of Splice(), to know, if a switch started with the buffer
+  and its delay to the live stream,
 - ReportSwitchEvent() for the first picture and the playback start and
   ReportFrameCorrection() for every dropped or repeated frame (statistics).
 

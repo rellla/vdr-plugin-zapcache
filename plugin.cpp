@@ -174,16 +174,10 @@ static bool ServiceSpliceArmed(void)
 	return zapCache && zapCache->SpliceArmed();
 }
 
-static void ServiceSplice(const unsigned char *data, int startThresholdMs, int (*play)(void *, const unsigned char *, int), void *context)
-{
-	if (cZapCache *zapCache = s_pZapCache)
-		zapCache->Splice(data, startThresholdMs, play, context);
-}
-
-static bool ServiceSwitchCached(void)
+static int ServiceSplice(const unsigned char *data, int startThresholdMs, int (*play)(void *, const unsigned char *, int), void *context)
 {
 	cZapCache *zapCache = s_pZapCache;
-	return zapCache && zapCache->SwitchCached();
+	return zapCache ? zapCache->Splice(data, startThresholdMs, play, context) : -1;
 }
 
 static void ServiceReportSwitchEvent(int event)
@@ -220,7 +214,6 @@ bool cPluginZapcache::Service(const char *id, void *data)
 		ZapCacheService_v1_0 *service = static_cast<ZapCacheService_v1_0 *>(data);
 		service->SpliceArmed = ServiceSpliceArmed;
 		service->Splice = ServiceSplice;
-		service->SwitchCached = ServiceSwitchCached;
 		service->ReportSwitchEvent = ServiceReportSwitchEvent;
 		service->ReportFrameCorrection = ServiceReportFrameCorrection;
 		service->SetOutputAvailable = ServiceSetOutputAvailable;

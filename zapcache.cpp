@@ -974,8 +974,12 @@ void cZapCache::TuneEntered(int channelNum)
  * @param audioAheadMs  playback start threshold of the audio of the output device
  * @param play          plays a TS packet (returns the played bytes, <= 0: try again)
  * @param context       passed to play
+ *
+ * @return              the delay of the playback in ms (time from the I-frame to the
+ *                      newest buffered packet, 0: unknown), if the switch started with
+ *                      the buffered packets, -1 otherwise
  */
-void cZapCache::Splice(const uchar *data, int audioAheadMs, int (*play)(void *, const uchar *, int), void *context)
+int cZapCache::Splice(const uchar *data, int audioAheadMs, int (*play)(void *, const uchar *, int), void *context)
 {
 	int64_t audioAhead = m_syncAudio ? audioAheadMs * 90LL : cZapBuffer::NEWEST_I_FRAME;
 	int64_t maxDelay = m_maxDelayMs * 90LL;
@@ -987,22 +991,22 @@ void cZapCache::Splice(const uchar *data, int audioAheadMs, int (*play)(void *, 
 		std::lock_guard<std::mutex> lock(m_mutex);
 
 		if (!m_spliceArmed)
-			return;
+			return -1;
 
 		// a packet of the old channel
 		int currentChannel = cDevice::CurrentChannel();
 		if (currentChannel == m_armedFromChannel)
-			return;
+			return -1;
 
 		cZapReceiver *receiver = ReceiverFor(currentChannel);
 		if (!receiver) {
 			m_spliceArmed = false;
-			return;
+			return -1;
 		}
 
 		// the PAT and PMT of the transfer
 		if (!receiver->HasPid(TsPid(data)))
-			return;
+			return -1;
 
 		m_spliceArmed = false;
 		channelNum = currentChannel;
@@ -1010,7 +1014,7 @@ void cZapCache::Splice(const uchar *data, int audioAheadMs, int (*play)(void *, 
 		cDevice *device = receiver->Device();
 		if (!device || device != cTransferControl::ReceiverDevice()) {
 			dsyslog("zapcache: the transfer of channel %d doesn't run on the device of the zap receiver", channelNum);
-			return;
+			return -1;
 		}
 
 		packets = receiver->Take(data, audioAhead, maxDelay, &taken);
@@ -1018,7 +1022,7 @@ void cZapCache::Splice(const uchar *data, int audioAheadMs, int (*play)(void *, 
 
 	if (packets.empty()) {
 		dsyslog("zapcache: no I-frame of channel %d buffered", channelNum);
-		return;
+		return -1;
 	}
 
 	for (size_t pos = 0; pos < packets.size(); pos += TS_SIZE) {
@@ -1026,7 +1030,7 @@ void cZapCache::Splice(const uchar *data, int audioAheadMs, int (*play)(void *, 
 		while (play(context, &packets[pos], TS_SIZE) <= 0) {
 			if (!--retries) {
 				isyslog("zapcache: channel %d: buffered packet not accepted, %zu of %zu packets played", channelNum, pos / TS_SIZE, packets.size() / TS_SIZE);
-				return;
+				return -1;
 			}
 			cCondWait::SleepMs(PLAY_RETRY_WAIT_MS);
 		}
@@ -1047,16 +1051,8 @@ void cZapCache::Splice(const uchar *data, int audioAheadMs, int (*play)(void *, 
 	dsyslog("zapcache: channel %d started with %d buffered frames (%zu packets, %dms delay)%s", channelNum, taken.frames, packets.size() / TS_SIZE,
 		taken.delay >= 0 ? static_cast<int>(taken.delay / 90) : 0,
 		audioAhead == cZapBuffer::NEWEST_I_FRAME ? "" : taken.synced ? " and synchronous audio" : ", without synchronous audio");
-}
 
-/**
- * Check, if the current channel switch started with the buffered packets
- */
-bool cZapCache::SwitchCached(void)
-{
-	std::lock_guard<std::mutex> lock(m_mutex);
-
-	return m_switchCached;
+	return taken.delay >= 0 ? static_cast<int>(taken.delay / 90) : 0;
 }
 
 /**

@@ -206,8 +206,7 @@ public:
 	void ResetStats(void);
 
 	bool SpliceArmed(void) const { return m_spliceArmed; }   ///< true, if a channel switch may start with the buffered packets
-	bool SwitchCached(void);
-	void Splice(const uchar *, int, int (*)(void *, const uchar *, int), void *);
+	int Splice(const uchar *, int, int (*)(void *, const uchar *, int), void *);
 
 private:
 	static constexpr int PREPARE_DELAY_MS = 500;   ///< delay after a channel switch (the live view gets the tuner first)

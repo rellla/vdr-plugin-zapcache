@@ -36,6 +36,12 @@ APIVERSION = $(call PKGCFG,apiversion)
 
 -include $(PLGCFG)
 
+### The code needs C++17, older compilers (e.g. gcc 9) use an older standard by default:
+
+ifeq ($(filter -std=%,$(CXXFLAGS)),)
+CXXFLAGS += -std=c++17
+endif
+
 ### The name of the distribution archive:
 
 ARCHIVE = $(PLUGIN)-$(VERSION)

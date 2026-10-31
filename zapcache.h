@@ -68,7 +68,8 @@ struct sZapChannel {
  * on the device (a receiver with the lowest priority isn't decrypted).
  *
  * The packets since the last I-frame are kept in a cZapBuffer, so a channel
- * switch can start with them (see cZapCache::Splice()).
+ * switch can start with them (see cZapCache::Splice()). A radio channel keeps
+ * the audio of the last seconds.
  *
  * @ingroup zapcache
  */
@@ -82,6 +83,7 @@ public:
 	int ChannelNumber(void) const { return m_channelNumber; }                ///< number of the received channel
 	cDevice *Device(void) const { return m_attached ? m_pDevice : nullptr; } ///< the receiving device (nullptr, if detached)
 	bool HasPid(int) const;
+	bool IsRadio(void) const { return !m_vpid; }                             ///< true, if a radio channel is received
 	bool IsTaken(void);
 	void Info(int *, bool *);
 	std::vector<uint8_t> Take(const uint8_t *, int64_t, int64_t, cZapBuffer::sTaken *);
@@ -96,7 +98,7 @@ private:
 	std::atomic<bool> m_attached = false;   ///< the receiver is attached (VDR may detach it, if it needs the device)
 	std::vector<int> m_pids;                ///< received pids
 	std::vector<int> m_audioPids;           ///< received audio pids
-	int m_vpid;                             ///< video pid (0: radio channel, nothing is buffered)
+	int m_vpid;                             ///< video pid (0: radio channel, only the audio is buffered)
 
 	std::mutex m_mutex;                     ///< protects the members below (receiver thread and Take())
 	cFrameDetector m_frameDetector;         ///< detects the frames of the video pid
@@ -166,8 +168,9 @@ public:
 		struct sReceiver {
 			int channel;            ///< channel number
 			int device;             ///< device number (starting with 1)
-			int frames;             ///< buffered frames
-			bool ready;             ///< an I-frame is buffered
+			int frames;             ///< buffered frames (radio: buffered audio in ms)
+			bool ready;             ///< an I-frame (radio: audio) is buffered
+			bool radio;             ///< a radio channel
 		};
 		std::vector<sReceiver> receivers;   ///< current receivers
 		int switches = 0;                   ///< channel switches with the zap cache

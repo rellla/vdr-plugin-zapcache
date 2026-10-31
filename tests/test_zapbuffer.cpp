@@ -321,3 +321,69 @@ TEST_CASE("cZapBuffer - the size is limited", "[zapbuffer]") {
 	REQUIRE_FALSE(buffer.Ready());
 	REQUIRE(buffer.Size() == 0);
 }
+
+TEST_CASE("cZapBuffer - a radio channel starts with an audio PES packet", "[zapbuffer]") {
+	cZapBuffer buffer;
+	buffer.SetRadio(true);
+	buffer.Put(Packet(APID, 1).data(), 0);              // the rest of a PES packet
+	REQUIRE_FALSE(buffer.Ready());
+	buffer.Put(Packet(APID, 2, 9000).data(), A);
+	buffer.Put(Packet(APID, 3).data(), 0);
+	REQUIRE(buffer.Ready());
+	REQUIRE(buffer.Frames() == 1);
+
+	std::vector<uint8_t> data = TakeNewest(buffer);
+	REQUIRE(data.size() == 2 * TS_SIZE);
+	REQUIRE(CounterAt(data, 0) == 2);
+}
+
+TEST_CASE("cZapBuffer - a radio channel starts with the audio up to the start threshold", "[zapbuffer]") {
+	// audio PES packets every 200ms from 0 to 1s
+	cZapBuffer buffer;
+	buffer.SetRadio(true);
+	for (int i = 0; i <= 5; i++) {
+		buffer.Put(Packet(APID, 2 * i + 1, i * 18000).data(), A);
+		buffer.Put(Packet(APID, 2 * i + 2).data(), 0);
+	}
+	REQUIRE(buffer.AudioMs() == 1000);
+
+	SECTION("the newest PES packet with enough audio") {
+		cZapBuffer::sTaken taken;
+		std::vector<uint8_t> data = buffer.Take(nullptr, 500 * 90, NO_LIMIT, &taken);
+		REQUIRE(taken.synced);
+		REQUIRE(taken.frames == 4);
+		REQUIRE(taken.delay == 600 * 90);
+		REQUIRE(CounterAt(data, 0) == 5);   // the PES packet at 400ms (600ms audio up to the newest one)
+	}
+
+	SECTION("not enough audio: as much as possible") {
+		cZapBuffer::sTaken taken;
+		std::vector<uint8_t> data = buffer.Take(nullptr, 2000 * 90, NO_LIMIT, &taken);
+		REQUIRE_FALSE(taken.synced);
+		REQUIRE(taken.frames == 6);
+		REQUIRE(CounterAt(data, 0) == 1);
+	}
+
+	SECTION("not older than the max. delay") {
+		cZapBuffer::sTaken taken;
+		std::vector<uint8_t> data = buffer.Take(nullptr, 2000 * 90, 700 * 90, &taken);
+		REQUIRE_FALSE(taken.synced);
+		REQUIRE(taken.delay == 600 * 90);
+		REQUIRE(CounterAt(data, 0) == 5);   // the PES packet at 400ms, 600ms before the newest one
+	}
+}
+
+TEST_CASE("cZapBuffer - a radio channel keeps the audio of the last seconds", "[zapbuffer]") {
+	cZapBuffer buffer;
+	buffer.SetRadio(true);
+	for (int i = 0; i < 50; i++)
+		buffer.Put(Packet(APID, i, i * 9000).data(), A);    // every 100ms, 4.9s
+
+	// at least RADIO_MAX_AUDIO, the next PES packet would be less
+	REQUIRE(buffer.AudioMs() == cZapBuffer::RADIO_MAX_AUDIO / 90);
+
+	// all buffered audio from 1.9s up to 4.9s
+	std::vector<uint8_t> data = TakeNewest(buffer);
+	REQUIRE(data.size() == 31 * TS_SIZE);
+	REQUIRE(CounterAt(data, 0) == 19);
+}

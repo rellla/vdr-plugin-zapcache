@@ -170,7 +170,10 @@ void cMenuSetupZapcache::Create(void)
 		for (const auto &r : stats.receivers) {
 			if (!channels.empty())
 				channels += ", ";
-			channels += *cString::sprintf(tr("%d (device %d, %d frames)"), r.channel, r.device, r.ready ? r.frames : 0);
+			if (r.radio)
+				channels += *cString::sprintf(tr("%d (device %d, %dms audio)"), r.channel, r.device, r.ready ? r.frames : 0);
+			else
+				channels += *cString::sprintf(tr("%d (device %d, %d frames)"), r.channel, r.device, r.ready ? r.frames : 0);
 		}
 		return cString::sprintf(tr("Zap cache: %s"), channels.empty() ? "-" : channels.c_str());
 	});

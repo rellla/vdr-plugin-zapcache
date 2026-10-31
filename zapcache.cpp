@@ -60,6 +60,8 @@ cZapReceiver::cZapReceiver(const sZapChannel &channel, cDevice *device, const cC
 
 	if (m_vpid)
 		m_frameDetector.SetPid(m_vpid, channel.vtype);
+	else
+		m_buffer.SetRadio(true);
 
 	dsyslog("zapcache: receive channel %d (%s) on device %d%s", m_channelNumber, channel.name.c_str(), device->DeviceNumber() + 1, camChannel ? " with CAM" : "");
 }
@@ -121,14 +123,14 @@ bool cZapReceiver::HasPid(int pid) const
 /**
  * Get the state of the buffer for the statistics
  *
- * @param[out] frames   number of the buffered frames
- * @param[out] ready    true, if an I-frame is buffered
+ * @param[out] frames   number of the buffered frames (radio: buffered audio in ms)
+ * @param[out] ready    true, if an I-frame (radio: audio) is buffered
  */
 void cZapReceiver::Info(int *frames, bool *ready)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 
-	*frames = m_buffer.Frames();
+	*frames = m_buffer.Radio() ? m_buffer.AudioMs() : m_buffer.Frames();
 	*ready = m_buffer.Ready();
 }
 
@@ -160,7 +162,8 @@ void cZapReceiver::Activate(bool on)
  *
  * The frame detector needs some packets ahead to determine the type of a frame,
  * so the packets wait in m_pending, until they are analyzed. Then they are put
- * into the buffer, which starts with the last I-frame.
+ * into the buffer, which starts with the last I-frame. The packets of a radio
+ * channel are put into the buffer at once.
  *
  * @param data      TS packets
  * @param length    length of the data (a multiple of TS_SIZE)
@@ -169,8 +172,14 @@ void cZapReceiver::Receive(const uchar *data, int length)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
 
-	if (m_taken || !m_vpid)
+	if (m_taken)
 		return;
+
+	if (!m_vpid) {
+		for (int i = 0; i + TS_SIZE <= length; i += TS_SIZE)
+			m_buffer.Put(data + i, PesStartFlags(data + i));
+		return;
+	}
 
 	m_pending.insert(m_pending.end(), data, data + length);
 
@@ -981,8 +990,9 @@ void cZapCache::TuneEntered(int channelNum)
  */
 int cZapCache::Splice(const uchar *data, int audioAheadMs, int (*play)(void *, const uchar *, int), void *context)
 {
-	int64_t audioAhead = m_syncAudio ? audioAheadMs * 90LL : cZapBuffer::NEWEST_I_FRAME;
+	int64_t audioAhead = cZapBuffer::NEWEST_I_FRAME;
 	int64_t maxDelay = m_maxDelayMs * 90LL;
+	bool radio = false;
 	std::vector<uint8_t> packets;
 	cZapBuffer::sTaken taken;
 	int channelNum;
@@ -1017,11 +1027,16 @@ int cZapCache::Splice(const uchar *data, int audioAheadMs, int (*play)(void *, c
 			return -1;
 		}
 
+		// a radio channel starts with the audio up to the start threshold in any case
+		radio = receiver->IsRadio();
+		if (m_syncAudio || radio)
+			audioAhead = audioAheadMs * 90LL;
+
 		packets = receiver->Take(data, audioAhead, maxDelay, &taken);
 	}
 
 	if (packets.empty()) {
-		dsyslog("zapcache: no I-frame of channel %d buffered", channelNum);
+		dsyslog("zapcache: no %s of channel %d buffered", radio ? "audio" : "I-frame", channelNum);
 		return -1;
 	}
 
@@ -1048,9 +1063,13 @@ int cZapCache::Splice(const uchar *data, int audioAheadMs, int (*play)(void *, c
 		}
 	}
 
-	dsyslog("zapcache: channel %d started with %d buffered frames (%zu packets, %dms delay)%s", channelNum, taken.frames, packets.size() / TS_SIZE,
-		taken.delay >= 0 ? static_cast<int>(taken.delay / 90) : 0,
-		audioAhead == cZapBuffer::NEWEST_I_FRAME ? "" : taken.synced ? " and synchronous audio" : ", without synchronous audio");
+	if (radio)
+		dsyslog("zapcache: radio channel %d started with %d buffered audio PES packets (%zu packets, %dms delay)%s", channelNum, taken.frames, packets.size() / TS_SIZE,
+			taken.delay >= 0 ? static_cast<int>(taken.delay / 90) : 0, taken.synced ? "" : ", less than the start threshold");
+	else
+		dsyslog("zapcache: channel %d started with %d buffered frames (%zu packets, %dms delay)%s", channelNum, taken.frames, packets.size() / TS_SIZE,
+			taken.delay >= 0 ? static_cast<int>(taken.delay / 90) : 0,
+			audioAhead == cZapBuffer::NEWEST_I_FRAME ? "" : taken.synced ? " and synchronous audio" : ", without synchronous audio");
 
 	return taken.delay >= 0 ? static_cast<int>(taken.delay / 90) : 0;
 }
@@ -1187,7 +1206,7 @@ void cZapCache::GetStats(sStats *stats)
 		if (!receiver)
 			continue;
 		cDevice *device = receiver->Device();
-		sStats::sReceiver r = { receiver->ChannelNumber(), device ? device->DeviceNumber() + 1 : 0, 0, false };
+		sStats::sReceiver r = { receiver->ChannelNumber(), device ? device->DeviceNumber() + 1 : 0, 0, false, receiver->IsRadio() };
 		receiver->Info(&r.frames, &r.ready);
 		stats->receivers.push_back(r);
 	}

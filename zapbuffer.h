@@ -36,6 +36,11 @@
  * may detect the start of a frame in a later TS packet of the PES packet (e.g.
  * VDR's H.265 parser, if the slice follows the parameter sets).
  *
+ * The buffer of a radio channel (SetRadio()) keeps the audio of the last
+ * RADIO_MAX_AUDIO ticks instead, it starts with an audio PES packet. A channel
+ * switch starts with as much audio, as the output device needs to start the
+ * playback.
+ *
  * @ingroup zapcache
  */
 class cZapBuffer {
@@ -52,20 +57,24 @@ public:
 	static constexpr int MAX_FRAMES = 150;
 	static constexpr size_t MAX_BYTES = 12 * 1024 * 1024; ///< max. size of the buffered packets
 	static constexpr int64_t NEWEST_I_FRAME = -1;         ///< Take(): start with the newest I-frame
+	static constexpr int64_t RADIO_MAX_AUDIO = 3 * 90000; ///< buffered audio of a radio channel (90kHz ticks)
 
 	/** the taken packets (see Take()) */
 	struct sTaken {
-		int frames = 0;                 ///< number of the frames
+		int frames = 0;                 ///< number of the frames (radio: audio PES packets)
 		bool synced = false;            ///< the packets start with an I-frame with synchronous audio
 		int64_t delay = -1;             ///< time from the I-frame to the newest video PES packet (90kHz ticks, -1: unknown)
 	};
 
+	void SetRadio(bool radio) { m_radio = radio; }          ///< buffer a radio channel (only the audio)
 	void Put(const uint8_t *, int);
 	std::vector<uint8_t> Take(const uint8_t *, int64_t, int64_t, sTaken *);
 	void Reset(void);
 
-	bool Ready(void) const { return !m_iFrames.empty(); }    ///< true, if the buffer starts with an I-frame
-	int Frames(void) const { return m_frames; }              ///< number of frames since the oldest I-frame
+	bool Ready(void) const { return !m_iFrames.empty(); }    ///< true, if the buffer starts with an I-frame (radio: with audio)
+	bool Radio(void) const { return m_radio; }               ///< true, if the buffer keeps a radio channel
+	int Frames(void) const { return m_frames; }              ///< number of frames since the oldest I-frame (radio: audio PES packets)
+	int AudioMs(void) const;
 	int IFrames(void) const { return m_iFrames.size(); }     ///< number of the buffered I-frames
 	size_t Size(void) const { return m_data.size(); }        ///< size of the buffered packets in bytes
 	int64_t AudioPts(void) const { return m_audioPts; }      ///< pts of the last audio PES packet (-1: none)
@@ -76,10 +85,10 @@ public:
 private:
 	static constexpr size_t NO_PES_START = static_cast<size_t>(-1); ///< m_pesStart: no video PES packet started
 
-	/** a buffered I-frame */
+	/** a buffered I-frame (radio: an audio PES packet) */
 	struct sIFrame {
 		size_t offset;              ///< offset of its video PES packet in m_data
-		int64_t pts;                ///< pts of its video PES packet (-1: none)
+		int64_t pts;                ///< pts of its video PES packet (-1: none, radio: pts of the audio PES packet)
 		int frame;                  ///< number of the frames before it in the buffer
 	};
 
@@ -89,8 +98,10 @@ private:
 	int64_t m_pesPts = -1;            ///< pts of the last video PES start
 	int m_frames = 0;                 ///< number of frames since the oldest I-frame (including it)
 	int64_t m_audioPts = -1;          ///< pts of the last audio PES start
+	bool m_radio = false;             ///< a radio channel, only the audio is buffered
 
 	void DropOldestIFrame(void);
+	void PutRadio(const uint8_t *, int);
 };
 
 #endif

@@ -70,6 +70,11 @@ void cZapBuffer::Put(const uint8_t *packet, int flags)
 		return;
 	}
 
+	if (m_radio) {
+		PutRadio(packet, flags);
+		return;
+	}
+
 	if (flags & VIDEO_PES_START) {
 		// while waiting for an I-frame, only the PES packet is kept, which may contain it
 		if (m_iFrames.empty())
@@ -119,6 +124,55 @@ void cZapBuffer::Put(const uint8_t *packet, int flags)
 }
 
 /**
+ * Add a TS packet of a radio channel
+ *
+ * Every audio PES packet with a pts may start a channel switch. The audio of
+ * the last RADIO_MAX_AUDIO ticks is kept.
+ *
+ * @param packet            TS packet (TS_SIZE bytes)
+ * @param flags             flags of the packet (enum Flags)
+ */
+void cZapBuffer::PutRadio(const uint8_t *packet, int flags)
+{
+	if (flags & AUDIO_PES_START) {
+		int64_t pts = PacketPts(packet);
+		if (pts >= 0) {
+			m_iFrames.push_back({ m_data.size(), pts, m_frames });
+			m_frames++;
+			m_audioPts = pts;
+			m_pesPts = pts;
+		}
+	}
+
+	// the audio before the first audio PES packet can't be played
+	if (m_iFrames.empty())
+		return;
+
+	while (m_iFrames.size() >= 2 && (PtsDiff(m_iFrames[1].pts, m_audioPts) >= RADIO_MAX_AUDIO || m_data.size() + TS_SIZE > MAX_BYTES))
+		DropOldestIFrame();
+
+	if (m_data.size() + TS_SIZE > MAX_BYTES) {
+		Reset();
+		return;
+	}
+
+	m_data.insert(m_data.end(), packet, packet + TS_SIZE);
+}
+
+/**
+ * Get the buffered audio of a radio channel
+ *
+ * @return          the time from the oldest audio PES packet to the newest one in ms
+ */
+int cZapBuffer::AudioMs(void) const
+{
+	if (m_iFrames.empty() || m_audioPts < 0 || m_iFrames.front().pts < 0)
+		return 0;
+
+	return std::max<int64_t>(0, PtsDiff(m_iFrames.front().pts, m_audioPts)) / 90;
+}
+
+/**
  * Drop the packets before the second I-frame
  */
 void cZapBuffer::DropOldestIFrame(void)
@@ -155,6 +209,11 @@ void cZapBuffer::DropOldestIFrame(void)
  * @param maxDelay      an I-frame with synchronous audio is only taken, if it is at
  *                      most this much (in 90kHz ticks) before the newest video PES
  *                      packet, otherwise the buffer starts with the newest I-frame
+ *
+ * A radio channel starts with the newest audio PES packet, whose audio up to the
+ * newest one fills audioAhead, but not older than maxDelay. If no audio PES packet
+ * has enough audio, it starts with the oldest one within maxDelay.
+ *
  * @param[out] taken    the frames, the delay and if the audio is synchronous
  *
  * @return              the packets from the I-frame up to the next packet
@@ -175,6 +234,16 @@ std::vector<uint8_t> cZapBuffer::Take(const uint8_t *next, int64_t audioAhead, i
 						break;
 					start = &*it;
 					taken->synced = true;
+					break;
+				}
+			}
+		}
+
+		// radio: as much audio as possible, if there isn't enough
+		if (m_radio && !taken->synced) {
+			for (const sIFrame &iFrame : m_iFrames) {
+				if (PtsDiff(iFrame.pts, m_audioPts) <= maxDelay) {
+					start = &iFrame;
 					break;
 				}
 			}

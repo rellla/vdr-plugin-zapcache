@@ -24,6 +24,10 @@ plugin, which supports the service interface (e.g. drmdevice), the switch
 starts with a buffered I-frame instead of waiting for the next one. With any
 other output plugin the channel is only tuned ahead.
 
+A radio channel keeps the audio of the last 3s. A switch to it starts with as
+much buffered audio, as the output device needs to start the playback (up to
+zapcache.MaxDelay), so the sound starts at once.
+
 The zap cache only works, while the live view is in transfer mode (the primary
 device is an output device without tuner), and only on devices, which are free
 (or tuned to the transponder of the channel). A recording or the live view gets

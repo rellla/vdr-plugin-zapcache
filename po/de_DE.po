@@ -61,6 +61,10 @@ msgid "Statistics"
 msgstr "Statistik"
 
 #, c-format
+msgid "%d (device %d, %dms audio)"
+msgstr "%d (Gerät %d, %dms Ton)"
+
+#, c-format
 msgid "%d (device %d, %d frames)"
 msgstr "%d (Gerät %d, %d Frames)"
 

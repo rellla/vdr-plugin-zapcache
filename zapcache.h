@@ -198,6 +198,7 @@ public:
 
 	void ChannelSwitchStarted(void);
 	void SetMode(int mode) { m_mode = mode; }                     ///< set the current mode (enum Mode)
+	int Mode(void) const { return m_mode; }                       ///< the current mode (enum Mode)
 	void ChannelSwitched(int);
 	void ChannelEntered(int);
 	void MainThreadHook(int, const sZapCacheSetup &);

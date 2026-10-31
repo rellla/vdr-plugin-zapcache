@@ -128,6 +128,15 @@ the first picture, the playback start and the frame corrections, the zap cache
 measures the times since the start of the switch. Without these reports the
 values are shown as "-". The red key resets the statistics.
 
+## SVDRP commands
+
+	STAT              status and statistics of the zap cache
+	RSTS              reset the statistics
+	ENAB [on|off]     switch the zap cache on or off (zapcache.Enable, stored in
+	                  setup.conf), without option: show, if it is on
+
+e.g. `svdrpsend plug zapcache STAT`
+
 ## Service interface for output plugins
 
 An output plugin copies `zapcache_service.h` and gets the functions once in its

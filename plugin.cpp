@@ -13,6 +13,9 @@
 #include <cstdio>
 #include <cstring>
 
+#include <string>
+
+#include <vdr/config.h>
 #include <vdr/device.h>
 #include <vdr/plugin.h>
 #include <vdr/status.h>
@@ -56,6 +59,8 @@ public:
 	virtual cMenuSetupPage *SetupMenu(void);
 	virtual bool SetupParse(const char *, const char *);
 	virtual bool Service(const char *, void * = nullptr);
+	virtual const char **SVDRPHelpPages(void);
+	virtual cString SVDRPCommand(const char *, const char *, int &);
 
 protected:
 	virtual void ChannelSwitch(const cDevice *, int, bool);
@@ -64,7 +69,11 @@ protected:
 
 private:
 	cZapCache m_zapCache;           ///< the zap cache
-	sZapCacheSetup m_setup;         ///< the setup values
+	sZapCacheSetup m_setup;         ///< the setup values (main thread only)
+	std::atomic<int> m_enabled = 1; ///< zapcache.Enable for SVDRP (the SVDRP thread doesn't read m_setup)
+	std::atomic<int> m_svdrpEnable = -1; ///< zapcache.Enable set by SVDRP (-1: none), stored by the main thread
+
+	cString Status(void);
 };
 
 cPluginZapcache::cPluginZapcache(void)
@@ -93,6 +102,14 @@ void cPluginZapcache::Stop(void)
  */
 void cPluginZapcache::MainThreadHook(void)
 {
+	// SVDRP ENAB
+	int enable = m_svdrpEnable.exchange(-1);
+	if (enable >= 0 && enable != m_setup.enable) {
+		SetupStore("Enable", m_setup.enable = enable);
+		Setup.Save();
+	}
+	m_enabled = m_setup.enable;
+
 	int mode = cZapCache::ZAP_AHEAD_OFF;
 	cDevice *primary = cDevice::PrimaryDevice();
 
@@ -220,6 +237,117 @@ bool cPluginZapcache::Service(const char *id, void *data)
 	}
 
 	return true;
+}
+
+/*****************************************************************************
+ * SVDRP
+ ****************************************************************************/
+
+/**
+ * Format an average channel switch time for the status
+ */
+static std::string SvdrpTime(int ms)
+{
+	return ms ? std::to_string(ms) + "ms" : "-";
+}
+
+/**
+ * Format the average frame corrections for the status
+ */
+static std::string SvdrpCorrections(double corrections)
+{
+	return corrections >= 0 ? *cString::sprintf("%.1f", corrections) : "-";
+}
+
+/**
+ * Create the status and the statistics of the zap cache (SVDRP STAT)
+ */
+cString cPluginZapcache::Status(void)
+{
+	static const char *modes[] = { "off", "next channel", "next and previous channel" };
+	int mode = m_zapCache.Mode();
+	cZapCache::sStats stats;
+	m_zapCache.GetStats(&stats);
+
+	std::string channels;
+	for (const auto &r : stats.receivers) {
+		if (!channels.empty())
+			channels += ", ";
+		if (r.radio)
+			channels += *cString::sprintf("%d (device %d, %dms audio)", r.channel, r.device, r.ready ? r.frames : 0);
+		else
+			channels += *cString::sprintf("%d (device %d, %d frames)", r.channel, r.device, r.ready ? r.frames : 0);
+	}
+
+	return cString::sprintf("enabled: %s\n"
+	                        "mode: %s\n"
+	                        "channels: %s\n"
+	                        "switches: %d, buffered: %d, synchronous audio: %d\n"
+	                        "switch time buffered: picture %s, playback %s, delay %s\n"
+	                        "switch time without buffer: picture %s, playback %s\n"
+	                        "frame corrections: buffered %s, without buffer %s",
+	                        m_enabled ? "yes" : "no",
+	                        modes[mode >= 0 && mode <= cZapCache::ZAP_AHEAD_BOTH ? mode : 0],
+	                        channels.empty() ? "-" : channels.c_str(),
+	                        stats.switches, stats.cached, stats.synced,
+	                        SvdrpTime(stats.pictureMs[1]).c_str(), SvdrpTime(stats.startMs[1]).c_str(), SvdrpTime(stats.delayMs).c_str(),
+	                        SvdrpTime(stats.pictureMs[0]).c_str(), SvdrpTime(stats.startMs[0]).c_str(),
+	                        SvdrpCorrections(stats.corrections[1]).c_str(), SvdrpCorrections(stats.corrections[0]).c_str());
+}
+
+const char **cPluginZapcache::SVDRPHelpPages(void)
+{
+	static const char *helpPages[] = {
+		"STAT\n"
+		"    Show the status and the statistics of the zap cache.",
+		"RSTS\n"
+		"    Reset the statistics.",
+		"ENAB [ on | off ]\n"
+		"    Switch the zap cache on or off (zapcache.Enable, stored in\n"
+		"    setup.conf). Without option, show if it is on.",
+		nullptr
+	};
+
+	return helpPages;
+}
+
+/**
+ * Handle an SVDRP command (SVDRP thread)
+ *
+ * @param command       the command
+ * @param option        the option of the command
+ * @param[out] replyCode    reply code (900: ok, 501: error)
+ *
+ * @return              the reply (nullptr: unknown command)
+ */
+cString cPluginZapcache::SVDRPCommand(const char *command, const char *option, int &replyCode)
+{
+	if (!strcasecmp(command, "STAT"))
+		return Status();
+
+	if (!strcasecmp(command, "RSTS")) {
+		m_zapCache.ResetStats();
+		return "statistics reset";
+	}
+
+	if (!strcasecmp(command, "ENAB")) {
+		if (option && *option) {
+			int enable;
+			if (!strcasecmp(option, "on") || !strcmp(option, "1"))
+				enable = 1;
+			else if (!strcasecmp(option, "off") || !strcmp(option, "0"))
+				enable = 0;
+			else {
+				replyCode = 501;
+				return cString::sprintf("invalid option \"%s\"", option);
+			}
+			m_svdrpEnable = enable;
+			m_enabled = enable;
+		}
+		return m_enabled ? "zap cache is on" : "zap cache is off";
+	}
+
+	return nullptr;
 }
 
 VDRPLUGINCREATOR(cPluginZapcache); // Don't touch this!

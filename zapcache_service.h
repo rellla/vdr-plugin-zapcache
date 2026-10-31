@@ -31,10 +31,17 @@
  * @endcode
  *
  * PlayBufferedTs() plays a TS packet with cDevice::PlayTs() of the base class.
+ *
+ * The header can be included by C code, too (e.g. the decoder of an output
+ * plugin).
  */
 
 #ifndef __ZAPCACHE_SERVICE_H
 #define __ZAPCACHE_SERVICE_H
+
+#ifndef __cplusplus
+#include <stdbool.h>
+#endif
 
 /** the id of the service (version 1.0 of the interface) */
 #define ZAPCACHE_SERVICE_V1_0 "ZapCache-v1.0"

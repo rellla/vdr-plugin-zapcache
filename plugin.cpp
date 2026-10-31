@@ -215,16 +215,35 @@ static void ServiceSetOutputAvailable(bool available)
 }
 
 /**
- * Provide the service interface for an output device
+ * Provide the service interface for an output device and the channels, which are received ahead
  *
- * @param id        ZAPCACHE_SERVICE_V1_0
- * @param data      ZapCacheService_v1_0, which gets the functions (nullptr: query only)
+ * @param id        ZAPCACHE_SERVICE_V1_0 or ZAPCACHE_CHANNELS_V1_0
+ * @param data      ZapCacheService_v1_0, which gets the functions, or
+ *                  ZapCacheChannels_v1_0, which gets the channels (nullptr: query only)
  *
  * @return          true, if the service is known
  */
 bool cPluginZapcache::Service(const char *id, void *data)
 {
-	if (!id || strcmp(id, ZAPCACHE_SERVICE_V1_0))
+	if (!id)
+		return false;
+
+	if (!strcmp(id, ZAPCACHE_CHANNELS_V1_0)) {
+		if (data) {
+			ZapCacheChannels_v1_0 *channels = static_cast<ZapCacheChannels_v1_0 *>(data);
+			cZapCache::sStats stats;
+			m_zapCache.GetStats(&stats);
+			channels->count = 0;
+			for (const auto &r : stats.receivers) {
+				if (channels->count == ZAPCACHE_MAX_CHANNELS)
+					break;
+				channels->channels[channels->count++] = { r.channel, r.device, r.ready, r.radio };
+			}
+		}
+		return true;
+	}
+
+	if (strcmp(id, ZAPCACHE_SERVICE_V1_0))
 		return false;
 
 	if (data) {

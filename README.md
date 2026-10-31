@@ -167,6 +167,13 @@ Optional calls:
 
 See `zapcache_service.h` for the details.
 
+## Service for other plugins
+
+Any plugin can query the channels, which are received ahead, with the service
+`ZapCache-Channels-v1.0` (e.g. a skin, which marks them in the channel list):
+their numbers, the receiving devices and if a switch to them can start with
+the buffer. See `zapcache_service.h`.
+
 ## Tests
 
 The unit tests of the buffer use Catch2 v3:

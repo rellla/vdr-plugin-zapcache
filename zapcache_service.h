@@ -32,6 +32,17 @@
  *
  * PlayBufferedTs() plays a TS packet with cDevice::PlayTs() of the base class.
  *
+ * Any plugin may query the channels, which are received ahead (e.g. a skin,
+ * which marks them in the channel list):
+ *
+ * @code
+ * ZapCacheChannels_v1_0 channels;
+ * if (cPluginManager::CallFirstService(ZAPCACHE_CHANNELS_V1_0, &channels)) {
+ *     for (int i = 0; i < channels.count; i++)
+ *         ... channels.channels[i].number ...
+ * }
+ * @endcode
+ *
  * The header can be included by C code, too (e.g. the decoder of an output
  * plugin).
  */
@@ -130,6 +141,26 @@ struct ZapCacheService_v1_0 {
 	 * the free devices, too). The zap cache releases its devices meanwhile.
 	 */
 	void (*SetOutputAvailable)(bool available);
+};
+
+/** the id of the query of the channels, which are received ahead (version 1.0) */
+#define ZAPCACHE_CHANNELS_V1_0 "ZapCache-Channels-v1.0"
+
+/** max. number of the channels, which are received ahead */
+#define ZAPCACHE_MAX_CHANNELS 4
+
+/** a channel, which is received ahead */
+struct ZapCacheChannel_v1_0 {
+	int number;     /**< channel number */
+	int device;     /**< number of the receiving device (starting with 1, 0: detached) */
+	bool ready;     /**< a switch to it can start with the buffer (an I-frame or audio is buffered) */
+	bool radio;     /**< a radio channel */
+};
+
+/** the channels, which are received ahead (ZAPCACHE_CHANNELS_V1_0) */
+struct ZapCacheChannels_v1_0 {
+	int count;      /**< number of the channels */
+	struct ZapCacheChannel_v1_0 channels[ZAPCACHE_MAX_CHANNELS]; /**< the channels */
 };
 
 #endif

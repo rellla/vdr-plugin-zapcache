@@ -1,0 +1,72 @@
+name: Set up the build environment
+description: >
+  Installs the build dependencies of the plugin, prepares a shallow VDR source
+  tree (./vdr) with the include directory and vdr.pc and moves the plugin
+  checkout into it (./vdr/PLUGINS/src/zapcache).
+
+inputs:
+  plugin-path:
+    description: Path of the plugin checkout, which is moved into the VDR source tree
+    required: false
+    default: zapcache
+  extra-packages:
+    description: Additional Debian/Ubuntu packages to install
+    required: false
+    default: ''
+  vdr-ref:
+    description: >
+      VDR branch or tag to build against (empty for the default branch). A
+      release series like "2.6" selects the latest release of that series.
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Install build dependencies
+      shell: bash
+      env:
+        DEBIAN_FRONTEND: noninteractive
+        EXTRA_PACKAGES: ${{ inputs.extra-packages }}
+      run: |
+        SUDO=""
+        if [ "$(id -u)" -ne 0 ]; then SUDO="sudo"; fi
+        $SUDO apt-get update -qq
+        # shellcheck disable=SC2086
+        $SUDO apt-get install -y -qq --no-install-recommends \
+          build-essential \
+          ca-certificates \
+          git \
+          gettext \
+          pkg-config \
+          libfreetype-dev \
+          libfontconfig-dev \
+          $EXTRA_PACKAGES
+
+    - name: Prepare VDR source tree
+      shell: bash
+      env:
+        VDR_REF: ${{ inputs.vdr-ref }}
+      run: |
+        VDR_URL=https://github.com/vdr-projects/vdr.git
+        # a release series (e.g. "2.6") selects its latest release tag
+        if [[ "$VDR_REF" =~ ^[0-9]+\.[0-9]+$ ]]; then
+          SERIES="$VDR_REF"
+          VDR_REF=$(git ls-remote --tags --refs "$VDR_URL" "refs/tags/$SERIES.*" \
+            | sed 's|.*refs/tags/||' | grep -E "^${SERIES//./\\.}\.[0-9]+$" | sort -V | tail -n1)
+          if [ -z "$VDR_REF" ]; then
+            echo "::error::No release of VDR $SERIES found"
+            exit 1
+          fi
+        fi
+        git clone --quiet --depth 1 ${VDR_REF:+--branch "$VDR_REF"} "$VDR_URL" vdr
+        git -C vdr log -1 --format='Building against VDR %h (%cs): %s'
+        make -C vdr include-dir vdr.pc
+
+    - name: Move the plugin into the VDR source tree
+      shell: bash
+      env:
+        PLUGIN_PATH: ${{ inputs.plugin-path }}
+      run: |
+        mkdir -p vdr/PLUGINS/src
+        mv "$PLUGIN_PATH" vdr/PLUGINS/src/zapcache

@@ -1,0 +1,68 @@
+name: Static analysis
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'HISTORY'
+      - 'LICENSE.md'
+      - '.github/dependabot.yml'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'HISTORY'
+      - 'LICENSE.md'
+      - '.github/dependabot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# cancel outdated runs of the same branch/pull request
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cppcheck:
+    name: cppcheck
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout plugin repository
+        uses: actions/checkout@v7
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends cppcheck
+
+      - name: Run cppcheck
+        run: |
+          cppcheck --version
+          cppcheck --quiet --error-exitcode=1 -j"$(nproc)" --std=c++17 --inline-suppr \
+            --enable=warning,performance,portability .
+
+  service-header:
+    # output plugins may include the service interface from C code
+    name: Service header (C and C++)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout plugin repository
+        uses: actions/checkout@v7
+
+      - name: Compile the service header
+        run: |
+          for std in c99 c11 c17; do
+            echo "C $std"
+            gcc -x c -std=$std -Wall -Wextra -Werror -fsyntax-only zapcache_service.h
+          done
+          for std in c++11 c++14 c++17 c++20; do
+            echo "C++ $std"
+            g++ -x c++ -std=$std -Wall -Wextra -Werror -fsyntax-only zapcache_service.h
+          done

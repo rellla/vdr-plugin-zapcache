@@ -1,0 +1,124 @@
+name: Build vdr-plugin-zapcache
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'HISTORY'
+      - 'LICENSE.md'
+      - '.github/dependabot.yml'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'HISTORY'
+      - 'LICENSE.md'
+      - '.github/dependabot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# cancel outdated runs of the same branch/pull request
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: GCC
+            cxx: g++
+            check-i18n: true
+            artifact: vdr-zapcache
+          - name: Clang
+            cxx: clang++
+            extra-packages: clang
+          # the latest releases of the older VDR versions
+          - name: GCC, VDR 2.6
+            cxx: g++
+            vdr-ref: '2.6'
+          - name: GCC, VDR 2.4
+            cxx: g++
+            vdr-ref: '2.4'
+
+    steps:
+      - name: Checkout plugin repository
+        uses: actions/checkout@v7
+        with:
+          path: zapcache
+
+      - name: Set up build environment
+        uses: ./zapcache/.github/actions/setup-build-env
+        with:
+          vdr-ref: ${{ matrix.vdr-ref }}
+          extra-packages: ${{ matrix.extra-packages }}
+
+      - name: Build plugin
+        run: |
+          make -C vdr/PLUGINS/src/zapcache -j"$(nproc)" \
+            CXX=${{ matrix.cxx }} \
+            INCLUDES="-isystem $PWD/vdr/include -Werror"
+
+      - name: Check translation files
+        if: matrix.check-i18n
+        working-directory: vdr/PLUGINS/src/zapcache
+        run: |
+          if ! git diff --quiet -- po/*.po; then
+            echo "::error::The translation files need to be updated:"
+            git --no-pager diff -- po/*.po
+            exit 1
+          fi
+
+      - name: Upload build artifacts
+        if: matrix.artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: vdr/PLUGINS/src/zapcache/libvdr-zapcache.so
+          if-no-files-found: error
+
+  build-container:
+    name: Build (${{ matrix.name }})
+    runs-on: ubuntu-24.04
+    container: ${{ matrix.image }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # gcc 9 uses C++14 by default (e.g. the packages for Ubuntu 20.04)
+          - name: Ubuntu 20.04, GCC 9
+            image: ubuntu:20.04
+          # catches upcoming compiler versions early
+          - name: Debian testing, GCC
+            image: debian:testing
+
+    steps:
+      - name: Install git
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update -qq
+          apt-get install -y -qq --no-install-recommends git ca-certificates
+
+      - name: Checkout plugin repository
+        uses: actions/checkout@v7
+        with:
+          path: zapcache
+
+      - name: Set up build environment
+        uses: ./zapcache/.github/actions/setup-build-env
+
+      - name: Build plugin
+        run: |
+          g++ --version | head -n1
+          make -C vdr/PLUGINS/src/zapcache -j"$(nproc)" \
+            INCLUDES="-isystem $PWD/vdr/include -Werror"

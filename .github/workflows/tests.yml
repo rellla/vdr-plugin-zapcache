@@ -1,0 +1,52 @@
+name: Unit tests
+
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'HISTORY'
+      - 'LICENSE.md'
+      - '.github/dependabot.yml'
+  pull_request:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'HISTORY'
+      - 'LICENSE.md'
+      - '.github/dependabot.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# cancel outdated runs of the same branch/pull request
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Unit tests
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout plugin repository
+        uses: actions/checkout@v7
+        with:
+          path: zapcache
+
+      - name: Set up build environment
+        uses: ./zapcache/.github/actions/setup-build-env
+        with:
+          extra-packages: catch2
+
+      - name: Run unit tests
+        working-directory: vdr/PLUGINS/src/zapcache/tests
+        run: make -j"$(nproc)" test
+
+      - name: Run unit tests with address and undefined behavior sanitizer
+        working-directory: vdr/PLUGINS/src/zapcache/tests
+        run: make -j"$(nproc)" BUILD=sanitize test

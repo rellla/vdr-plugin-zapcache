@@ -8,8 +8,9 @@
  *
  * @license{MIT}
  *
- * An output plugin copies this header. It gets the interface once (e.g. in its
- * first cPlugin::MainThreadHook(), when all plugins are started):
+ * An output plugin copies this header. It gets the interface once in its
+ * cPlugin::Start(): VDR starts all plugins, before it switches to the first
+ * live channel, so cDevice::PlayTs() doesn't run yet:
  *
  * @code
  * ZapCacheService_v1_0 zapCache = {};

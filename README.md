@@ -124,8 +124,9 @@ are reported by the output device. The red key resets the statistics.
 
 ## Service interface for output plugins
 
-An output plugin copies `zapcache_service.h` and gets the functions once, when
-all plugins are started:
+An output plugin copies `zapcache_service.h` and gets the functions once in its
+cPlugin::Start() (VDR starts all plugins, before it switches to the first live
+channel):
 
 	ZapCacheService_v1_0 zapCache = {};
 	cPluginManager::CallFirstService(ZAPCACHE_SERVICE_V1_0, &zapCache);

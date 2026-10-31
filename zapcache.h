@@ -13,6 +13,7 @@
 #define __ZAPCACHE_ZAPCACHE_H
 
 #include <atomic>
+#include <chrono>
 #include <mutex>
 #include <string>
 #include <vector>
@@ -199,8 +200,8 @@ public:
 	void MainThreadHook(int, const sZapCacheSetup &);
 	void Clear(void);
 
-	void ReportSwitchTime(bool, int);
-	void ReportSwitchCorrections(int);
+	void ReportSwitchEvent(int);
+	void ReportFrameCorrection(int, int);
 	void GetStats(sStats *);
 	void ResetStats(void);
 
@@ -251,12 +252,17 @@ private:
 	int m_startCount[2] = {};                ///< number of these times
 	int64_t m_delaySumMs = 0;                ///< sum of the delays of the switches with buffer
 	int m_delayCount = 0;                    ///< number of these delays
-	bool m_countingCorrections = false;      ///< the frame corrections of the current switch are counted
+	std::chrono::steady_clock::time_point m_switchStart;   ///< start of the current switch
+	bool m_countingCorrections = false;      ///< the frame corrections of the current switch are counted (after its playback start)
+	std::atomic<bool> m_correctionWindow = false;          ///< the frame corrections are counted now (ReportFrameCorrection())
+	std::chrono::steady_clock::time_point m_correctionEnd; ///< end of the time, in which the corrections are counted
+	int m_corrections = 0;                   ///< frame corrections of the current switch
 	int64_t m_correctionSum[2] = {};         ///< sum of the frame corrections after a switch [without buffer, with buffer]
 	int m_correctionCount[2] = {};           ///< number of these switches
 	time_t m_lastSwitch;                     ///< time of the last channel switch (also by SVDRP)
 	bool m_released = false;                 ///< the receivers were released without key press (main thread only)
 
+	void FinishCorrections(bool);
 	bool HasReceivers(void) const;
 	cZapReceiver *ReceiverFor(int) const;
 	void Prepare(int, int, int);

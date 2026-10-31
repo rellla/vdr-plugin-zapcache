@@ -21,6 +21,7 @@
 
 #include "setup.h"
 #include "zapcache.h"
+#include "zapcache_service.h"
 
 /*****************************************************************************
  * cZapReceiver class
@@ -323,13 +324,15 @@ void cZapCache::ChannelSwitchStarted(void)
 	m_spliceArmed = HasReceivers();
 	m_spliceTimer.Set(SPLICE_TIMEOUT_MS);
 
-	// statistics
+	// statistics (the corrections of the last switch count, if their time is over)
+	FinishCorrections(false);
 	m_measuring = m_mode != ZAP_AHEAD_OFF;
 	m_countingCorrections = m_measuring;
 	if (m_measuring)
 		m_switches++;
 	m_switchCached = false;
 	m_pictureReported = false;
+	m_switchStart = std::chrono::steady_clock::now();
 }
 
 /**
@@ -459,6 +462,12 @@ void cZapCache::MainThreadHook(int mode, const sZapCacheSetup &setup)
 {
 	int releaseSeconds = ReleaseSeconds(setup.release);
 	bool cam = setup.cam;
+
+	// the time of the frame corrections may be over without a correction
+	if (m_correctionWindow) {
+		std::lock_guard<std::mutex> lock(m_mutex);
+		FinishCorrections(true);
+	}
 
 	m_mode = mode;
 	m_syncAudio = setup.syncAudio;
@@ -1051,25 +1060,29 @@ bool cZapCache::SwitchCached(void)
 }
 
 /**
- * Report the time of a channel switch for the statistics
+ * Report an event of a channel switch for the statistics
  *
- * Called by the renderer for the first picture (in the fast channel switch modes)
- * and for the start of the playback. Without a fast channel switch mode, the
- * playback starts with the first picture.
+ * Called by the output device for the first picture and for the start of the
+ * playback (picture and sound). The time is measured since the start of the
+ * channel switch (ChannelSwitchStarted()). Without a first picture event, the
+ * playback start counts as the first picture, too. The playback start opens the
+ * time, in which the frame corrections are counted.
  *
- * @param start         false: the first picture was shown, true: the playback started
- * @param ms            time since the start of the channel switch in ms
+ * @param event         ZAPCACHE_FIRST_PICTURE or ZAPCACHE_PLAYBACK_STARTED
  */
-void cZapCache::ReportSwitchTime(bool start, int ms)
+void cZapCache::ReportSwitchEvent(int event)
 {
+	auto now = std::chrono::steady_clock::now();
 	std::lock_guard<std::mutex> lock(m_mutex);
 
 	if (!m_measuring)
 		return;
 
+	bool start = event == ZAPCACHE_PLAYBACK_STARTED;
+	int ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - m_switchStart).count();
 	int cached = m_switchCached ? 1 : 0;
 
-	if (!start || !m_pictureReported) {
+	if (!m_pictureReported) {
 		m_pictureSumMs[cached] += ms;
 		m_pictureCount[cached]++;
 		m_pictureReported = true;
@@ -1079,29 +1092,61 @@ void cZapCache::ReportSwitchTime(bool start, int ms)
 		m_startSumMs[cached] += ms;
 		m_startCount[cached]++;
 		m_measuring = false;
+
+		if (m_countingCorrections) {
+			m_corrections = 0;
+			m_correctionEnd = now + std::chrono::milliseconds(ZAPCACHE_CORRECTION_WINDOW_MS);
+			m_correctionWindow = true;
+		}
 	}
 }
 
 /**
- * Report the frame corrections of the A/V sync after a channel switch
+ * Report frame corrections of the A/V sync for the statistics
  *
- * Called by the renderer, when the first frames after the playback start were
- * shown (see cVideoRender::SWITCH_CORRECTION_FRAMES). A switch, which starts
- * with audio, which isn't synchronous to the video, has to drop or to repeat
- * frames.
+ * Called by the output device, whenever it drops or repeats frames. A switch,
+ * which starts with audio, which isn't synchronous to the video, has to drop or
+ * to repeat frames. The corrections are counted within
+ * ZAPCACHE_CORRECTION_WINDOW_MS after the playback start of a channel switch.
  *
- * @param corrections   number of the dropped and repeated frames
+ * @param dropped       number of the dropped frames
+ * @param repeated      number of the repeated frames
  */
-void cZapCache::ReportSwitchCorrections(int corrections)
+void cZapCache::ReportFrameCorrection(int dropped, int repeated)
 {
-	std::lock_guard<std::mutex> lock(m_mutex);
-
-	if (!m_countingCorrections)
+	// cheap, if nothing is counted
+	if (!m_correctionWindow)
 		return;
 
-	int cached = m_switchCached ? 1 : 0;
-	m_correctionSum[cached] += corrections;
-	m_correctionCount[cached]++;
+	std::lock_guard<std::mutex> lock(m_mutex);
+
+	FinishCorrections(true);
+	if (m_correctionWindow)
+		m_corrections += std::max(dropped, 0) + std::max(repeated, 0);
+}
+
+/**
+ * Add the frame corrections of the current switch to the statistics, if their time is over
+ *
+ * The caller holds the mutex.
+ *
+ * @param keep      true: keep counting, if the time isn't over, false: stop counting
+ *                  (a new switch starts, its corrections are discarded then)
+ */
+void cZapCache::FinishCorrections(bool keep)
+{
+	if (!m_correctionWindow)
+		return;
+
+	if (std::chrono::steady_clock::now() >= m_correctionEnd) {
+		int cached = m_switchCached ? 1 : 0;
+		m_correctionSum[cached] += m_corrections;
+		m_correctionCount[cached]++;
+	} else if (keep) {
+		return;
+	}
+
+	m_correctionWindow = false;
 	m_countingCorrections = false;
 }
 
@@ -1127,6 +1172,7 @@ void cZapCache::ResetStats(void)
 	m_delaySumMs = 0;
 	m_delayCount = 0;
 	m_countingCorrections = false;
+	m_correctionWindow = false;
 }
 
 /**
@@ -1137,6 +1183,8 @@ void cZapCache::ResetStats(void)
 void cZapCache::GetStats(sStats *stats)
 {
 	std::lock_guard<std::mutex> lock(m_mutex);
+
+	FinishCorrections(true);
 
 	stats->receivers.clear();
 	for (cZapReceiver *receiver : { m_pReceivers[0], m_pReceivers[1], m_pEntered }) {

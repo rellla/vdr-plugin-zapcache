@@ -119,8 +119,10 @@ The setup menu shows the received channels, how many switches started with a
 buffer and the average switch times (until the first picture and until the
 playback started) with and without a buffer, the average delay of the switches
 with a buffer and the average frame corrections of the A/V sync (dropped and
-repeated frames) after a switch. The switch times and the frame corrections
-are reported by the output device. The red key resets the statistics.
+repeated frames) within 5s after the playback start. The output device reports
+the first picture, the playback start and the frame corrections, the zap cache
+measures the times since the start of the switch. Without these reports the
+values are shown as "-". The red key resets the statistics.
 
 ## Service interface for output plugins
 
@@ -146,7 +148,8 @@ Optional calls:
 - SetOutputAvailable(false), while the output device can't use the zap cache
   (e.g. detached or pip shown),
 - SwitchCached(), to know, if a switch started with the buffer,
-- ReportSwitchTime() and ReportSwitchCorrections() for the statistics.
+- ReportSwitchEvent() for the first picture and the playback start and
+  ReportFrameCorrection() for every dropped or repeated frame (statistics).
 
 See `zapcache_service.h` for the details.
 

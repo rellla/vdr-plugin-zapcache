@@ -46,6 +46,15 @@
 /** the id of the service (version 1.0 of the interface) */
 #define ZAPCACHE_SERVICE_V1_0 "ZapCache-v1.0"
 
+/** events of a channel switch (see ZapCacheService_v1_0::ReportSwitchEvent()) */
+enum ZapCacheSwitchEvent {
+	ZAPCACHE_FIRST_PICTURE = 0,     /**< the first picture of the new channel is shown */
+	ZAPCACHE_PLAYBACK_STARTED = 1   /**< the playback of the new channel started (picture and sound) */
+};
+
+/** time after ZAPCACHE_PLAYBACK_STARTED, in which the frame corrections are counted */
+#define ZAPCACHE_CORRECTION_WINDOW_MS 5000
+
 /**
  * Service interface of the zapcache plugin (version 1.0)
  *
@@ -83,20 +92,32 @@ struct ZapCacheService_v1_0 {
 	bool (*SwitchCached)(void);
 
 	/**
-	 * Report the time of a channel switch for the statistics
+	 * Report an event of a channel switch for the statistics (optional)
 	 *
-	 * @param start     false: the first picture was shown, true: the playback started
-	 * @param ms        time since the start of the channel switch in ms
+	 * The zap cache measures the time since the start of the channel switch
+	 * (VDR's cStatus::ChannelSwitch()), so all output devices use the same
+	 * time base. Without ZAPCACHE_FIRST_PICTURE the playback start counts as
+	 * the first picture, too. Only the first report of an event after a channel
+	 * switch counts.
+	 *
+	 * @param event     ZAPCACHE_FIRST_PICTURE or ZAPCACHE_PLAYBACK_STARTED
 	 */
-	void (*ReportSwitchTime)(bool start, int ms);
+	void (*ReportSwitchEvent)(int event);
 
 	/**
-	 * Report the frame corrections of the A/V sync after a channel switch
+	 * Report frame corrections of the A/V sync for the statistics (optional)
 	 *
-	 * @param corrections   dropped and repeated frames within the first frames
-	 *                      after the playback start (e.g. 250)
+	 * Called, whenever the output device drops or repeats frames to keep the
+	 * video in sync with the audio, e.g. ReportFrameCorrection(1, 0) for a
+	 * dropped frame. Cheap enough for every frame. The zap cache counts the
+	 * corrections within ZAPCACHE_CORRECTION_WINDOW_MS after
+	 * ZAPCACHE_PLAYBACK_STARTED of a channel switch, so the output device has to
+	 * report this event, too.
+	 *
+	 * @param dropped   number of the dropped frames
+	 * @param repeated  number of the repeated frames
 	 */
-	void (*ReportSwitchCorrections)(int corrections);
+	void (*ReportFrameCorrection)(int dropped, int repeated);
 
 	/**
 	 * Report, if the output device can show the live view with the zap cache

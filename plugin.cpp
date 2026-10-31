@@ -186,16 +186,16 @@ static bool ServiceSwitchCached(void)
 	return zapCache && zapCache->SwitchCached();
 }
 
-static void ServiceReportSwitchTime(bool start, int ms)
+static void ServiceReportSwitchEvent(int event)
 {
 	if (cZapCache *zapCache = s_pZapCache)
-		zapCache->ReportSwitchTime(start, ms);
+		zapCache->ReportSwitchEvent(event);
 }
 
-static void ServiceReportSwitchCorrections(int corrections)
+static void ServiceReportFrameCorrection(int dropped, int repeated)
 {
 	if (cZapCache *zapCache = s_pZapCache)
-		zapCache->ReportSwitchCorrections(corrections);
+		zapCache->ReportFrameCorrection(dropped, repeated);
 }
 
 static void ServiceSetOutputAvailable(bool available)
@@ -221,8 +221,8 @@ bool cPluginZapcache::Service(const char *id, void *data)
 		service->SpliceArmed = ServiceSpliceArmed;
 		service->Splice = ServiceSplice;
 		service->SwitchCached = ServiceSwitchCached;
-		service->ReportSwitchTime = ServiceReportSwitchTime;
-		service->ReportSwitchCorrections = ServiceReportSwitchCorrections;
+		service->ReportSwitchEvent = ServiceReportSwitchEvent;
+		service->ReportFrameCorrection = ServiceReportFrameCorrection;
 		service->SetOutputAvailable = ServiceSetOutputAvailable;
 	}
 

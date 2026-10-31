@@ -1,0 +1,11 @@
+VDR Plugin 'zapcache' Revision History
+--------------------------------------
+
+2026-10-31: Version 0.1.0
+
+- Initial version. The zap cache was part of the output plugin drmdevice
+  (version 2.2.0) and is a plugin of its own now, so other output plugins can
+  use it through the service interface (zapcache_service.h).
+- The setup values are named zapcache.* (formerly drmdevice.ZapAhead*):
+  Enable, Tuners, Release, SyncAudio, MaxDelay, Cam. The zap cache is on by
+  default, when the plugin is loaded.

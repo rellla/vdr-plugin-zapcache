@@ -1,0 +1,88 @@
+# German translations for the VDR plugin zapcache
+# Copyright (C) 2026 Andreas Baierl
+# This file is distributed under the same license as the zapcache package.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: vdr-zapcache 0.1.0\n"
+"Report-Msgid-Bugs-To: <see README>\n"
+"POT-Creation-Date: 2026-10-31 13:00+0100\n"
+"PO-Revision-Date: 2026-10-31 13:00+0100\n"
+"Last-Translator: Andreas Baierl <ichgeh@imkreisrum.de>\n"
+"Language-Team: German\n"
+"Language: de\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+msgid "Tunes the neighbour channels ahead and buffers them"
+msgstr "Tunt die Nachbarkanäle vorab und puffert sie"
+
+msgid "Tune channels ahead"
+msgstr "Kanäle vorab tunen"
+
+msgid " Tuners for live view and cache"
+msgstr " Tuner für Live-Bild und Cache"
+
+msgid " Release the tuners without key press"
+msgstr " Tuner ohne Tastendruck freigeben"
+
+msgid " Start with synchronous audio"
+msgstr " Mit synchronem Ton starten"
+
+msgid "  Max. delay"
+msgstr "  Max. Verzögerung"
+
+msgid " Buffer encrypted channels (CAM)"
+msgstr " Verschlüsselte Sender puffern (CAM)"
+
+msgid "2 (next channel)"
+msgstr "2 (nächster Kanal)"
+
+msgid "3 (next and previous channel)"
+msgstr "3 (nächster und vorheriger Kanal)"
+
+msgid "never"
+msgstr "nie"
+
+msgid "after 20s"
+msgstr "nach 20s"
+
+msgid "after 50s"
+msgstr "nach 50s"
+
+msgid "after 5min"
+msgstr "nach 5min"
+
+msgid "after 30min"
+msgstr "nach 30min"
+
+msgid "Statistics"
+msgstr "Statistik"
+
+#, c-format
+msgid "%d (device %d, %d frames)"
+msgstr "%d (Gerät %d, %d Frames)"
+
+#, c-format
+msgid "Zap cache: %s"
+msgstr "Zap-Cache: %s"
+
+#, c-format
+msgid "Zap cache: %d of %d switches buffered, %d with synchronous audio"
+msgstr "Zap-Cache: %d von %d Umschaltungen gepuffert, %d mit synchronem Ton"
+
+#, c-format
+msgid "Switch time buffered: picture %s, playback %s, delay %s"
+msgstr "Umschaltzeit gepuffert: Bild %s, Wiedergabe %s, Verzögerung %s"
+
+#, c-format
+msgid "Switch time without buffer: picture %s, playback %s"
+msgstr "Umschaltzeit ohne Puffer: Bild %s, Wiedergabe %s"
+
+#, c-format
+msgid "Frame corrections after a switch: buffered %s, without buffer %s"
+msgstr "Bildkorrekturen nach Umschaltung: gepuffert %s, ohne Puffer %s"
+
+msgid "Button$Reset statistics"
+msgstr "Statistik löschen"

@@ -1,0 +1,6 @@
+*.o
+*.so
+*.mo
+*.pot
+.dependencies
+tests/obj/

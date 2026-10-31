@@ -24,7 +24,7 @@
 #include "zapcache.h"
 #include "zapcache_service.h"
 
-static const char *VERSION        = "0.1.0";
+static const char *VERSION        = "0.2.0";
 static const char *DESCRIPTION    = trNOOP("Tunes the neighbour channels ahead and buffers them");
 
 /**

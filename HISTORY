@@ -1,6 +1,24 @@
 VDR Plugin 'zapcache' Revision History
 --------------------------------------
 
+2026-10-31: Version 0.2.0
+
+- Service interface: the header can be included by C code, too. An output
+  plugin gets the interface in cPlugin::Start(), before VDR switches to the
+  first live channel.
+- Service interface: the output device reports the first picture and the
+  playback start of a channel switch (ReportSwitchEvent()), the zap cache
+  measures the times. Every dropped or repeated frame is reported
+  (ReportFrameCorrection()), the zap cache counts them within 5s after the
+  playback start. Splice() returns the delay of the playback to the live
+  stream (-1: not started with the buffer), SwitchCached() is gone.
+- Radio channels are buffered: a switch to them starts with as much buffered
+  audio, as the output device needs to start the playback.
+- SVDRP commands STAT (status and statistics), RSTS (reset the statistics) and
+  ENAB (switch the zap cache on or off).
+- Service ZapCache-Channels-v1.0: any plugin can query the channels, which are
+  received ahead.
+
 2026-10-31: Version 0.1.0
 
 - Initial version. The zap cache was part of the output plugin drmdevice

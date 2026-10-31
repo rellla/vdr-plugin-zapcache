@@ -18,24 +18,6 @@ msgstr ""
 msgid "Tunes the neighbour channels ahead and buffers them"
 msgstr "Tunt die Nachbarkanäle vorab und puffert sie"
 
-msgid "Tune channels ahead"
-msgstr "Kanäle vorab tunen"
-
-msgid " Tuners for live view and cache"
-msgstr " Tuner für Live-Bild und Cache"
-
-msgid " Release the tuners without key press"
-msgstr " Tuner ohne Tastendruck freigeben"
-
-msgid " Start with synchronous audio"
-msgstr " Mit synchronem Ton starten"
-
-msgid "  Max. delay"
-msgstr "  Max. Verzögerung"
-
-msgid " Buffer encrypted channels (CAM)"
-msgstr " Verschlüsselte Sender puffern (CAM)"
-
 msgid "2 (next channel)"
 msgstr "2 (nächster Kanal)"
 
@@ -56,6 +38,24 @@ msgstr "nach 5min"
 
 msgid "after 30min"
 msgstr "nach 30min"
+
+msgid "Tune channels ahead"
+msgstr "Kanäle vorab tunen"
+
+msgid " Tuners for live view and cache"
+msgstr " Tuner für Live-Bild und Cache"
+
+msgid " Release the tuners without key press"
+msgstr " Tuner ohne Tastendruck freigeben"
+
+msgid " Start with synchronous audio"
+msgstr " Mit synchronem Ton starten"
+
+msgid "  Max. delay"
+msgstr "  Max. Verzögerung"
+
+msgid " Buffer encrypted channels (CAM)"
+msgstr " Verschlüsselte Sender puffern (CAM)"
 
 msgid "Statistics"
 msgstr "Statistik"
